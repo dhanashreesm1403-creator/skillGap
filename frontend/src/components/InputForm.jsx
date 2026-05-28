@@ -1,18 +1,23 @@
 import { useState } from "react";
 
+// useState is React's way of remembering data
+// When state changes, the page updates automatically — no refresh needed
+
 function InputForm({ onSubmit }) {
   const [jobDescription, setJobDescription] = useState("");
   const [currentSkills, setCurrentSkills] = useState("");
-  const [timeAvailable, setTimeAvailable] = useState("");
+  const [preparationDuration, setPreparationDuration] = useState("");
+  const [dailyHours, setDailyHours] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!jobDescription || !currentSkills || !timeAvailable) {
+    // Validate — make sure nothing is empty
+    if (!jobDescription || !currentSkills || !preparationDuration || !dailyHours) {
       alert("Please fill in all fields!");
       return;
     }
     setLoading(true);
-    await onSubmit({ jobDescription, currentSkills, timeAvailable });
+    await onSubmit({ jobDescription, currentSkills, preparationDuration, dailyHours });
     setLoading(false);
   };
 
@@ -30,7 +35,7 @@ function InputForm({ onSubmit }) {
           </p>
         </div>
 
-        {/* Card */}
+        {/* Form Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl space-y-6">
 
           {/* Job Description */}
@@ -45,6 +50,8 @@ function InputForm({ onSubmit }) {
               placeholder="Paste the full job description here — requirements, responsibilities, everything..."
               className="w-full bg-gray-800 text-white border border-gray-700 rounded-xl px-4 py-3 text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none transition"
             />
+            {/* What this does: onChange fires every time user types.
+                e.target.value is what they typed. We save it in state. */}
           </div>
 
           {/* Current Skills */}
@@ -61,18 +68,45 @@ function InputForm({ onSubmit }) {
             />
           </div>
 
-          {/* Time Available */}
-          <div>
-            <label className="block text-sm font-semibold text-purple-400 mb-2">
-              ⏰ Time You Have to Prepare
-            </label>
-            <input
-              type="text"
-              value={timeAvailable}
-              onChange={(e) => setTimeAvailable(e.target.value)}
-              placeholder="e.g. 30 days, 2 months, 6 weeks..."
-              className="w-full bg-gray-800 text-white border border-gray-700 rounded-xl px-4 py-3 text-sm placeholder-gray-500 focus:outline-none focus:border-purple-500 transition"
-            />
+          {/* Two dropdowns side by side */}
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* Preparation Duration */}
+            <div>
+              <label className="block text-sm font-semibold text-purple-400 mb-2">
+                📅 Preparation Duration
+              </label>
+              <select
+                value={preparationDuration}
+                onChange={(e) => setPreparationDuration(e.target.value)}
+                className="w-full bg-gray-800 text-white border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition"
+              >
+                <option value="">Select duration</option>
+                <option value="1 month">1 Month</option>
+                <option value="3 months">3 Months</option>
+                <option value="6 months">6 Months</option>
+              </select>
+              {/* A <select> creates a dropdown. Each <option> is one choice.
+                  value="" is the placeholder (empty default) */}
+            </div>
+
+            {/* Daily Learning Hours */}
+            <div>
+              <label className="block text-sm font-semibold text-purple-400 mb-2">
+                ⏰ Daily Learning Hours
+              </label>
+              <select
+                value={dailyHours}
+                onChange={(e) => setDailyHours(e.target.value)}
+                className="w-full bg-gray-800 text-white border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition"
+              >
+                <option value="">Select hours</option>
+                <option value="2">2 hours/day</option>
+                <option value="3">3 hours/day</option>
+                <option value="6">6 hours/day</option>
+              </select>
+            </div>
+
           </div>
 
           {/* Submit Button */}
@@ -87,8 +121,9 @@ function InputForm({ onSubmit }) {
         </div>
 
         <p className="text-center text-gray-600 text-xs mt-6">
-          Powered by AI • Free resources only • Built for your success
+          Powered by Gemini AI • Free resources only • Built for your success
         </p>
+
       </div>
     </div>
   );
