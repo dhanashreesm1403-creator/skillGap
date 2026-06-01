@@ -1,3 +1,4 @@
+import SkillDashboard from "./SkillDashboard";
 function Results({ data, onReset }) {
 
   // This function draws the circular progress bar using SVG
@@ -144,6 +145,16 @@ function Results({ data, onReset }) {
             ))}
           </div>
         </div>
+
+{/* Skill Dashboard */}
+{data.missingSkills?.length > 0 && (
+  <SkillDashboard
+    skills={data.missingSkills.map((skill, i) => ({
+      name: skill,
+      estimatedHours: Math.floor(Math.random() * 30) + 10
+    }))}
+  />
+)}
 
         {/* Weekly Schedule */}
         <div className="space-y-4 mb-6">
