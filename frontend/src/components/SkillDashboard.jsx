@@ -1,19 +1,24 @@
 import { useState } from "react";
+import AssessmentTest from "./AssessmentTest";
 
-function SkillDashboard({ skills, onComplete }) {
-  // unlockedIndex tracks which skill is currently active
-  // Start at 0 — only first skill is unlocked
+function SkillDashboard({ skills }) {
   const [unlockedIndex, setUnlockedIndex] = useState(0);
   const [completedSkills, setCompletedSkills] = useState([]);
+  const [activeTest, setActiveTest] = useState(null);
 
-  const handleMarkComplete = (skillName, index) => {
-    // Add to completed list
-    setCompletedSkills([...completedSkills, skillName]);
+  const handleTestPass = (score) => {
+    // Add current skill to completed
+    const currentSkill = skills[unlockedIndex];
+    setCompletedSkills([...completedSkills, currentSkill.name]);
     // Unlock next skill
-    setUnlockedIndex(index + 1);
+    setUnlockedIndex(unlockedIndex + 1);
+    setActiveTest(null);
   };
 
-  // Small circular progress for each skill card
+  const handleTestFail = (score) => {
+    setActiveTest(null);
+  };
+
   const MiniCircle = ({ percentage, color = "#9333ea" }) => {
     const size = 56;
     const radius = 22;
@@ -43,11 +48,8 @@ function SkillDashboard({ skills, onComplete }) {
           const isUnlocked = index <= unlockedIndex;
           const isLocked = !isUnlocked;
           const isCurrent = index === unlockedIndex && !isCompleted;
+          const progress = isCompleted ? 100 : 0;
 
-          // Determine progress percentage
-          const progress = isCompleted ? 100 : isCurrent ? 0 : 0;
-
-          // Determine status label and color
           const getStatus = () => {
             if (isCompleted) return { label: "✅ Completed", color: "text-green-400 bg-green-900" };
             if (isCurrent) return { label: "🔥 In Progress", color: "text-yellow-400 bg-yellow-900" };
@@ -56,17 +58,12 @@ function SkillDashboard({ skills, onComplete }) {
           const status = getStatus();
 
           return (
-            <div
-              key={index}
-              className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
-                isLocked
-                  ? "border-gray-800 bg-gray-800 opacity-50"
-                  : isCompleted
-                  ? "border-green-800 bg-gray-900"
-                  : "border-purple-700 bg-gray-900"
-              }`}
-            >
-              {/* Skill number */}
+            <div key={index} className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+              isLocked ? "border-gray-800 bg-gray-800 opacity-50" :
+              isCompleted ? "border-green-800 bg-gray-900" :
+              "border-purple-700 bg-gray-900"
+            }`}>
+
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
                 isCompleted ? "bg-green-700 text-white" :
                 isCurrent ? "bg-purple-700 text-white" :
@@ -75,35 +72,29 @@ function SkillDashboard({ skills, onComplete }) {
                 {isCompleted ? "✓" : index + 1}
               </div>
 
-              {/* Mini progress circle */}
               <MiniCircle
                 percentage={progress}
                 color={isCompleted ? "#22c55e" : isCurrent ? "#9333ea" : "#374151"}
               />
 
-              {/* Skill info */}
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className={`font-semibold ${isLocked ? "text-gray-500" : "text-white"}`}>
-                    {skill.name}
-                  </p>
-                  {isLocked && <span className="text-gray-600 text-xs">🔒</span>}
-                </div>
+                <p className={`font-semibold ${isLocked ? "text-gray-500" : "text-white"}`}>
+                  {skill.name} {isLocked && "🔒"}
+                </p>
                 <p className="text-gray-500 text-xs mt-0.5">{skill.estimatedHours} hrs estimated</p>
               </div>
 
-              {/* Status badge */}
               <span className={`text-xs px-3 py-1 rounded-full font-semibold ${status.color}`}>
                 {status.label}
               </span>
 
-              {/* Mark complete button — only for current skill */}
+              {/* Take Test button — only for current skill */}
               {isCurrent && (
                 <button
-                  onClick={() => handleMarkComplete(skill.name, index)}
+                  onClick={() => setActiveTest(skill.name)}
                   className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg transition flex-shrink-0"
                 >
-                  Mark Done ✓
+                  Take Test 📝
                 </button>
               )}
             </div>
@@ -111,12 +102,22 @@ function SkillDashboard({ skills, onComplete }) {
         })}
       </div>
 
-      {/* All completed message */}
+      {/* All completed */}
       {completedSkills.length === skills.length && skills.length > 0 && (
         <div className="mt-6 text-center bg-green-900 border border-green-700 rounded-xl p-4">
           <p className="text-green-300 font-bold text-lg">🎉 All Skills Completed!</p>
           <p className="text-green-400 text-sm mt-1">You're ready to apply for this job!</p>
         </div>
+      )}
+
+      {/* Assessment Test Modal */}
+      {activeTest && (
+        <AssessmentTest
+          skill={activeTest}
+          onPass={handleTestPass}
+          onFail={handleTestFail}
+          onClose={() => setActiveTest(null)}
+        />
       )}
     </div>
   );

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
+from supabase import create_client
 import os
 import json
 import random
@@ -9,7 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Load all 3 keys and filter out any empty ones
 keys = [
     os.getenv("GEMINI_KEY_1"),
     os.getenv("GEMINI_KEY_2"),
@@ -17,10 +17,10 @@ keys = [
 ]
 keys = [k for k in keys if k]
 
-def get_client():
-    # Randomly pick a key each time — spreads the load
-    key = random.choice(keys)
-    return genai.Client(api_key=key)
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
 
 app = FastAPI()
 
@@ -44,65 +44,29 @@ def root():
 
 @app.post("/analyze")
 async def analyze(request: AnalyzeRequest):
-    prompt = f"""
-    You are an expert career coach and skill gap analyzer.
-    
-    A user wants to apply for the following job:
-    {request.jobDescription}
-    
-    They currently have these skills:
-    {request.currentSkills}
-    
-    They have {request.preparationDuration} to prepare.
-    They can dedicate {request.dailyHours} hours per day.
-    
-    Analyze the skill gap and return a JSON response with this EXACT structure:
-    {{
-        "missingSkills": ["skill1", "skill2"],
-        "existingSkills": ["skill1", "skill2"],
-        "readinessScore": 40,
-        "feasibilityScore": 85,
-        "feasibilityLabel": "Highly Achievable",
-        "feasibilityMessage": "Based on your timeline and daily hours, this is achievable!",
-        "totalRequiredHours": 160,
-        "totalAvailableHours": 90,
-        "schedule": [
-            {{
-                "week": 1,
-                "focus": "Skill Name",
-                "days": "Day 1-7",
-                "tasks": ["task1", "task2", "task3"],
-                "estimatedHours": 20
-            }}
-        ],
-        "resources": [
-            {{
-                "skill": "Skill Name",
-                "platform": "Platform Name",
-                "url": "https://actual-free-url.com",
-                "type": "free"
-            }}
-        ],
-        "projects": [
-            {{
-                "title": "Project Title",
-                "description": "Brief description",
-                "difficulty": "Beginner"
-            }}
-        ]
-    }}
-    
-    Important rules:
-    1. Only return valid JSON — no extra text, no markdown, no backticks
-    2. readinessScore = percentage of required skills user already has (0-100)
-    3. feasibilityScore = how achievable given their time (0-100)
-    4. feasibilityLabel must be one of: "Highly Achievable", "Challenging but Possible", "Difficult", "Unrealistic"
-    5. All resource URLs must be real, working, free websites
-    6. Generate at least 3 industry-relevant projects
-    7. Schedule should be week by week based on their duration
-    """
+    prompt = (
+        "You are an expert career coach and skill gap analyzer.\n\n"
+        f"Job Description: {request.jobDescription}\n\n"
+        f"User's Current Skills: {request.currentSkills}\n\n"
+        f"Preparation Duration: {request.preparationDuration}\n"
+        f"Daily Learning Hours: {request.dailyHours} hours per day\n\n"
+        "Return ONLY a valid JSON object with this exact structure, no extra text:\n"
+        "{\n"
+        '  "missingSkills": ["skill1", "skill2"],\n'
+        '  "existingSkills": ["skill1", "skill2"],\n'
+        '  "readinessScore": 40,\n'
+        '  "feasibilityScore": 85,\n'
+        '  "feasibilityLabel": "Highly Achievable",\n'
+        '  "feasibilityMessage": "Your timeline is achievable!",\n'
+        '  "totalRequiredHours": 160,\n'
+        '  "totalAvailableHours": 90,\n'
+        '  "schedule": [{"week": 1, "focus": "Skill", "days": "Day 1-7", "tasks": ["task1"], "estimatedHours": 20}],\n'
+        '  "resources": [{"skill": "Skill", "platform": "Platform", "url": "https://example.com", "type": "free"}],\n'
+        '  "projects": [{"title": "Project", "description": "Description", "difficulty": "Beginner"}],\n'
+        '  "skillsWithHours": [{"name": "Skill", "estimatedHours": 20}]\n'
+        "}"
+    )
 
-    # Try each key — if one fails move to next
     random.shuffle(keys)
     for key in keys:
         try:
@@ -111,20 +75,82 @@ async def analyze(request: AnalyzeRequest):
                 model="gemini-2.5-flash",
                 contents=prompt
             )
-            
+
             raw = response.text.strip()
-            
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
                     raw = raw[4:]
-            
+
             result = json.loads(raw.strip())
+
+            try:
+                session = supabase.table("sessions").insert({
+                    "job_description": request.jobDescription,
+                    "current_skills": request.currentSkills,
+                    "preparation_duration": request.preparationDuration,
+                    "daily_hours": request.dailyHours,
+                    "readiness_score": result.get("readinessScore", 0),
+                    "feasibility_score": result.get("feasibilityScore", 0)
+                }).execute()
+
+                session_id = session.data[0]["id"]
+
+                for skill in result.get("missingSkills", []):
+                    supabase.table("skill_progress").insert({
+                        "session_id": session_id,
+                        "skill_name": skill,
+                        "status": "locked"
+                    }).execute()
+
+                result["sessionId"] = session_id
+
+            except Exception as db_error:
+                print(f"DB Error: {db_error}")
+
             return result
 
         except Exception as e:
-            # This key failed — try the next one
+            print(f"Key failed: {e}")
             continue
 
-    # All keys failed
+# Model for saving test results
+class TestResult(BaseModel):
+    sessionId: str
+    skillName: str
+    score: int
+    passed: bool
+
+@app.post("/save-test")
+async def save_test(result: TestResult):
+    # Why: saves every test attempt to database permanently
+    try:
+        # Save test attempt
+        supabase.table("test_attempts").insert({
+            "session_id": result.sessionId,
+            "skill_name": result.skillName,
+            "score": result.score,
+            "passed": result.passed
+        }).execute()
+
+        # If passed, update skill status to completed
+        if result.passed:
+            supabase.table("skill_progress").update({
+                "status": "completed"
+            }).eq("session_id", result.sessionId).eq("skill_name", result.skillName).execute()
+
+        return {"message": "Test result saved!", "passed": result.passed}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/session/{session_id}")
+async def get_session(session_id: str):
+    # Why: lets frontend load saved progress when user returns
+    try:
+        progress = supabase.table("skill_progress").select("*").eq("session_id", session_id).execute()
+        return {"skills": progress.data}
+    except Exception as e:
+        return {"error": str(e)}
+    
     return {"error": "All API keys exhausted. Please try again later."}
