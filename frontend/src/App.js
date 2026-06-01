@@ -14,7 +14,7 @@ function App() {
     try {
       // fetch() sends data to Satyam's backend
       // method POST means we're sending data, not just reading
-      const response = await fetch("http://10.222.19.225:8000/analyze", {
+      const response = await fetch("http://localhost:8000/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
